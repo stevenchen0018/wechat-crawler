@@ -1,0 +1,213 @@
+{{define "articles"}}
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Title}} - 微信公众号爬虫管理系统</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="/static/css/admin.css?v=1.0.0" rel="stylesheet">
+</head>
+<body>
+    {{template "navbar" .}}
+
+    <div class="container-fluid mt-4">
+<div class="row mb-4">
+    <div class="col-12">
+        <div>
+            <h2 class="mb-2">
+                <i class="bi bi-file-earmark-text me-2"></i>文章管理
+            </h2>
+            <p class="text-muted mb-0">查看和管理已采集的文章</p>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-5">
+        <div class="input-group">
+            <span class="input-group-text"><i class="bi bi-search"></i></span>
+            <input type="text" class="form-control" id="searchInput" 
+                   placeholder="搜索文章标题..." value="{{.SearchKeyword}}">
+        </div>
+    </div>
+    <div class="col-md-4">
+        <select class="form-select" id="accountFilter" onchange="filterByAccount()">
+            <option value="">全部公众号</option>
+            {{range .Accounts}}
+            <option value="{{.ID.Hex}}" {{if eq $.FilterAccountID .ID.Hex}}selected{{end}}>
+                {{.Name}}
+            </option>
+            {{end}}
+        </select>
+    </div>
+    <div class="col-md-3">
+        <button class="btn btn-primary w-100" onclick="doSearch()">
+            <i class="bi bi-search me-1"></i>搜索
+        </button>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                {{if .Articles}}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th style="width: 40%;">标题</th>
+                                <th>公众号</th>
+                                <th>作者</th>
+                                <th>发布时间</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {{range .Articles}}
+                            <tr>
+                                <td>
+                                    <strong>{{.Title}}</strong>
+                                    {{if .Digest}}
+                                    <br><small class="text-muted">{{.Digest}}</small>
+                                    {{end}}
+                                </td>
+                                <td><span class="badge bg-primary">{{.AccountName}}</span></td>
+                                <td>{{if .Author}}{{.Author}}{{else}}-{{end}}</td>
+                                <td>{{formatTime .PublishTime}}</td>
+                                <td>
+                                    <a href="{{.ContentURL}}" target="_blank" class="btn btn-sm btn-outline-primary">
+                                        <i class="bi bi-eye"></i> 查看原文
+                                    </a>
+                                </td>
+                            </tr>
+                            {{end}}
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- 分页 -->
+                {{if gt .TotalPages 1}}
+                <nav class="mt-4">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div class="text-muted small">
+                            共 {{.TotalPages}} 页
+                        </div>
+                        <ul class="pagination mb-0">
+                            <!-- 首页 -->
+                            <li class="page-item {{if eq .Page 1}}disabled{{end}}">
+                                <a class="page-link" href="?page=1{{if .FilterAccountID}}&account_id={{.FilterAccountID}}{{end}}">首页</a>
+                            </li>
+                            
+                            <!-- 上一页 -->
+                            <li class="page-item {{if eq .Page 1}}disabled{{end}}">
+                                <a class="page-link" href="?page={{sub .Page 1}}{{if .FilterAccountID}}&account_id={{.FilterAccountID}}{{end}}">
+                                    <i class="bi bi-chevron-left"></i>
+                                </a>
+                            </li>
+                            
+                            <!-- 页码 -->
+                            {{range .Pages}}
+                            <li class="page-item {{if eq . $.Page}}active{{end}}">
+                                <a class="page-link" href="?page={{.}}{{if $.FilterAccountID}}&account_id={{$.FilterAccountID}}{{end}}">{{.}}</a>
+                            </li>
+                            {{end}}
+                            
+                            <!-- 下一页 -->
+                            <li class="page-item {{if eq .Page .TotalPages}}disabled{{end}}">
+                                <a class="page-link" href="?page={{add .Page 1}}{{if .FilterAccountID}}&account_id={{.FilterAccountID}}{{end}}">
+                                    <i class="bi bi-chevron-right"></i>
+                                </a>
+                            </li>
+                            
+                            <!-- 尾页 -->
+                            <li class="page-item {{if eq .Page .TotalPages}}disabled{{end}}">
+                                <a class="page-link" href="?page={{.TotalPages}}{{if .FilterAccountID}}&account_id={{.FilterAccountID}}{{end}}">尾页</a>
+                            </li>
+                        </ul>
+                        
+                        <!-- 跳转 -->
+                        <div class="d-flex align-items-center gap-2">
+                            <input type="number" class="form-control form-control-sm" id="jumpPage" placeholder="页码" 
+                                   style="width: 70px;" min="1" max="{{.TotalPages}}">
+                            <button class="btn btn-sm btn-primary" onclick="jumpToPage()">跳转</button>
+                        </div>
+                    </div>
+                </nav>
+                {{end}}
+                {{else}}
+                <div class="text-center py-5">
+                    <i class="bi bi-inbox" style="font-size: 48px; color: var(--gray-300);"></i>
+                    <p class="mt-3 mb-2" style="font-size: 16px; font-weight: 500;">暂无文章数据</p>
+                    <p class="text-muted">添加公众号订阅后，系统会自动采集文章</p>
+                </div>
+                {{end}}
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+// 搜索文章
+function doSearch() {
+    const keyword = document.getElementById('searchInput').value.trim();
+    const url = new URL(window.location);
+    
+    if (keyword) {
+        url.searchParams.set('keyword', keyword);
+    } else {
+        url.searchParams.delete('keyword');
+    }
+    url.searchParams.set('page', '1');
+    
+    window.location.href = url.toString();
+}
+
+// 回车搜索
+document.getElementById('searchInput').addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') {
+        doSearch();
+    }
+});
+
+function filterByAccount() {
+    const accountId = document.getElementById('accountFilter').value;
+    const url = new URL(window.location);
+    
+    if (accountId) {
+        url.searchParams.set('account_id', accountId);
+    } else {
+        url.searchParams.delete('account_id');
+    }
+    url.searchParams.set('page', '1');
+    
+    window.location.href = url.toString();
+}
+
+function jumpToPage() {
+    const page = document.getElementById('jumpPage').value;
+    const totalPages = {{.TotalPages}};
+    
+    if (!page || page < 1 || page > totalPages) {
+        showError('请输入有效的页码（1-' + totalPages + '）');
+        return;
+    }
+    
+    const url = new URL(window.location);
+    url.searchParams.set('page', page);
+    window.location.href = url.toString();
+}
+</script>
+    </div>
+
+    {{template "footer" .}}
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <script src="/static/js/admin.js?v=1.0.0"></script>
+</body>
+</html>
+{{end}}
+
+

@@ -11,7 +11,7 @@ mongodb:
 
 # 爬虫配置
 crawler:
-  interval: 60  # 爬取间隔（分钟）
+  interval: 480  # 爬取间隔（分钟）
   concurrent: 3  # 并发爬取数量
   timeout: 60    # 单次爬取超时时间（秒）
   user_data_dir: "./chrome_data"  # Chrome用户数据目录
@@ -30,5 +30,9 @@ log:
 # 微信公众号后台配置
 wechat:
   mp_url: "https://mp.weixin.qq.com"  # 微信公众号平台地址
-  login_scan_timeout: 120  # 扫码登录超时时间（秒）
+  login_scan_timeout: 120  # 扫码登录超时时间（秒）    
 
+# 管理员
+admin:
+    password: $2a$10$h9L9yY39EDyaULsUbKgcx.GhyiR2G0xb2prJsnR7IYuCqyYG1ugwe
+    username: admin

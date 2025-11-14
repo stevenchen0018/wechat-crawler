@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>登录 - 微信公众号爬虫管理系统</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="/static/css/admin.css?v=1.0.0" rel="stylesheet">
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-box">
+            <div class="text-center mb-5">
+                <div class="login-logo mb-3">
+                    <i class="bi bi-robot"></i>
+                </div>
+                <h3 class="fw-semibold mb-2">欢迎回来</h3>
+                <p class="text-muted small">登录微信公众号爬虫管理系统</p>
+            </div>
+
+            {{if .Error}}
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                <i class="bi bi-exclamation-triangle-fill"></i> {{.Error}}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+            {{end}}
+
+            <form method="POST" action="/admin/login">
+                <div class="mb-4">
+                    <label for="username" class="form-label small fw-medium">用户名</label>
+                    <input type="text" class="form-control form-control-lg" id="username" name="username" 
+                           placeholder="输入用户名" required autofocus>
+                </div>
+
+                <div class="mb-4">
+                    <label for="password" class="form-label small fw-medium">密码</label>
+                    <input type="password" class="form-control form-control-lg" id="password" name="password" 
+                           placeholder="输入密码" required>
+                </div>
+
+                <div class="mb-4">
+                    <label for="captcha" class="form-label small fw-medium">验证码</label>
+                    <div class="row g-2">
+                        <div class="col-7">
+                            <input type="text" class="form-control form-control-lg" id="captcha" name="captcha" 
+                                   placeholder="输入验证码" required>
+                        </div>
+                        <div class="col-5">
+                            <img src="" class="captcha-img" id="captchaImg" 
+                                 onclick="refreshCaptcha()" 
+                                 title="点击刷新" alt="验证码">
+                        </div>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-primary w-100 btn-lg mb-3">
+                    登录
+                </button>
+            </form>
+
+            <div class="text-center">
+                <small class="text-muted">
+                    <i class="bi bi-shield-check me-1"></i>安全登录保护
+                </small>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // 刷新验证码
+        function refreshCaptcha() {
+            const img = document.getElementById('captchaImg');
+            
+            // 显示加载状态
+            img.style.opacity = '0.5';
+            
+            // 异步获取验证码base64数据
+            fetch('/admin/captcha?' + Date.now())
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('获取验证码失败');
+                    }
+                    return response.text();
+                })
+                .then(base64Data => {
+                    // 如果返回的数据已经包含data:image前缀，直接使用
+                    // 否则添加前缀
+                    if (base64Data.startsWith('data:image')) {
+                        img.src = base64Data;
+                    } else {
+                        img.src = 'data:image/png;base64,' + base64Data;
+                    }
+                    img.style.opacity = '1';
+                })
+                .catch(error => {
+                    console.error('刷新验证码失败:', error);
+                    img.style.opacity = '1';
+                    // 显示错误提示
+                    img.alt = '验证码加载失败，点击重试';
+                });
+        }
+
+        // 页面加载时获取验证码
+        window.addEventListener('load', function() {
+            refreshCaptcha();
+        });
+
+        // 添加键盘事件监听
+        document.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                const form = document.querySelector('form');
+                if (form) {
+                    form.submit();
+                }
+            }
+        });
+    </script>
+</body>
+</html>
+

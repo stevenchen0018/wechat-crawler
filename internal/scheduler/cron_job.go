@@ -31,14 +31,19 @@ func NewScheduler(crawlerService *service.CrawlerService, interval int) *Schedul
 func (s *Scheduler) Start() error {
 	// 构建cron表达式：每N分钟执行一次
 	// 格式：秒 分 时 日 月 周
-	cronExpr := fmt.Sprintf("0 */%d * * * *", s.interval)
+	cronExpr, err := s.BuildCronExpr(s.interval)
+	if err != nil {
+		logger.Error("构建cron表达式失败", zap.Error(err))
+		return err
+	}
+	// cronExpr := fmt.Sprintf("0 */%d * * * *", s.interval)
 
 	logger.Info("配置定时任务",
 		zap.Int("interval_minutes", s.interval),
 		zap.String("cron_expr", cronExpr))
 
 	// 添加定时任务
-	_, err := s.cron.AddFunc(cronExpr, func() {
+	_, err = s.cron.AddFunc(cronExpr, func() {
 		s.executeCrawlTask()
 	})
 
@@ -79,4 +84,28 @@ func (s *Scheduler) executeCrawlTask() {
 func (s *Scheduler) RunOnce() {
 	logger.Info("手动触发爬取任务")
 	s.executeCrawlTask()
+}
+
+func (s *Scheduler) BuildCronExpr(interval int) (string, error) {
+	if interval < 5 || interval > 1440 {
+		return "", fmt.Errorf("interval must be between 5 and 1440 minutes")
+	}
+
+	// 小于 60 分钟：直接使用 */N
+	if interval < 60 {
+		return fmt.Sprintf("0 */%d * * * *", interval), nil
+	}
+
+	// 大于或等于 60 分钟
+	hours := interval / 60   // 每 N 小时执行
+	minutes := interval % 60 // 偏移分钟，例如 90 分钟 = 1 小时 + 30 分钟
+
+	if minutes == 0 {
+		// 整小时：每 N 小时执行一次
+		return fmt.Sprintf("0 0 */%d * * *", hours), nil
+	}
+
+	// 带分钟偏移：例如 90 分钟 = 每1小时的第 30 分钟执行
+	// 但要确保 interval 最终是 N 小时 + offset，要让策略逻辑能接受
+	return fmt.Sprintf("0 %d */%d * * *", minutes, hours), nil
 }

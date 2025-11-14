@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"wechat-crawler/internal/model"
@@ -24,8 +25,9 @@ type Browser struct {
 	cookieManager *CookieManager
 	mpURL         string
 	timeout       time.Duration
-	token         string // 微信公众号平台的token，用于API请求
-	debugMode     bool   // debug模式，为true时浏览器不自动关闭
+	token         string     // 微信公众号平台的token，用于API请求
+	debugMode     bool       // debug模式，为true时浏览器不自动关闭
+	mu            sync.Mutex // 互斥锁，保护浏览器操作避免并发导致封控
 }
 
 // NewBrowser 创建浏览器实例
@@ -71,9 +73,17 @@ func (b *Browser) Close() {
 		return
 	}
 
+	logger.Info("正在关闭浏览器...")
+
 	if b.cancel != nil {
+		// 先取消context，触发chromedp的清理流程
 		b.cancel()
+
+		// 等待一小段时间让浏览器正常退出
+		time.Sleep(500 * time.Millisecond)
 	}
+
+	logger.Info("浏览器已关闭")
 }
 
 // Login 登录微信公众号平台
@@ -303,6 +313,10 @@ LoginSuccess:
 
 // SearchAccount 搜索公众号并获取FakeID
 func (b *Browser) SearchAccount(accountName string) (string, error) {
+	// 加锁保护，避免并发请求导致封控
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
 	logger.Info("搜索公众号", zap.String("name", accountName), zap.String("token", b.token))
 
 	// 检查token是否存在
@@ -374,6 +388,10 @@ func (b *Browser) SearchAccount(accountName string) (string, error) {
 
 // FetchArticles 获取公众号文章列表
 func (b *Browser) FetchArticles(fakeID string, count int) ([]*model.ArticleListItem, error) {
+	// 加锁保护，避免并发请求导致封控
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
 	logger.Info("获取文章列表", zap.String("fakeID", fakeID), zap.Int("count", count), zap.String("token", b.token))
 
 	// 检查token是否存在
@@ -404,7 +422,8 @@ func (b *Browser) FetchArticles(fakeID string, count int) ([]*model.ArticleListI
 	err := chromedp.Run(ctx,
 		chromedp.Navigate(articleURL),
 		chromedp.Sleep(2*time.Second),
-		chromedp.Text("body", &responseText, chromedp.ByQuery),
+		// 使用 JavaScript 获取纯文本内容，避免 HTML 标签干扰
+		chromedp.Evaluate(`document.body.textContent || document.body.innerText`, &responseText),
 	)
 
 	if err != nil {
@@ -440,6 +459,10 @@ func (b *Browser) FetchArticles(fakeID string, count int) ([]*model.ArticleListI
 
 // FetchArticleContent 获取文章详细内容
 func (b *Browser) FetchArticleContent(articleURL string) (string, error) {
+	// 加锁保护，避免并发请求导致封控
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
 	logger.Info("获取文章内容", zap.String("url", articleURL))
 
 	// Debug模式下不使用超时，方便调试
@@ -454,23 +477,77 @@ func (b *Browser) FetchArticleContent(articleURL string) (string, error) {
 	}
 	defer cancel()
 
-	var content string
-	err := chromedp.Run(ctx,
-		chromedp.Navigate(articleURL),
-		chromedp.Sleep(2*time.Second),
-		chromedp.OuterHTML("#js_content", &content, chromedp.ByID),
-	)
-
+	// 首先导航到文章页面
+	err := chromedp.Run(ctx, chromedp.Navigate(articleURL))
 	if err != nil {
-		logger.Error("获取文章内容失败", zap.Error(err))
-		return "", err
+		logger.Error("导航到文章页面失败", zap.String("url", articleURL), zap.Error(err))
+		return "", fmt.Errorf("导航失败: %w", err)
 	}
+
+	// 等待页面加载
+	time.Sleep(2 * time.Second)
+
+	// 检查页面标题，判断文章是否存在
+	var pageTitle string
+	err = chromedp.Run(ctx, chromedp.Title(&pageTitle))
+	if err != nil {
+		logger.Warn("无法获取页面标题", zap.Error(err))
+	} else {
+		// 检查是否是404或文章已删除的页面
+		if strings.Contains(pageTitle, "404") ||
+			strings.Contains(pageTitle, "页面不存在") ||
+			strings.Contains(pageTitle, "已删除") ||
+			strings.Contains(pageTitle, "此内容发送失败无法查看") ||
+			strings.Contains(pageTitle, "微信公众平台") ||
+			strings.Contains(pageTitle, "该内容暂时无法查看") ||
+			strings.Contains(pageTitle, "已被删除") {
+			logger.Warn("文章已删除或不存在",
+				zap.String("url", articleURL),
+				zap.String("title", pageTitle))
+			return "", fmt.Errorf("文章已删除或不存在: %s", pageTitle)
+		}
+	}
+
+	// 检查文章内容元素是否存在
+	var nodes []*cdp.Node
+	err = chromedp.Run(ctx, chromedp.Nodes("#js_content", &nodes, chromedp.ByID))
+	if err != nil {
+		logger.Error("查找文章内容元素失败", zap.String("url", articleURL), zap.Error(err))
+		return "", fmt.Errorf("查找内容元素失败: %w", err)
+	}
+
+	if len(nodes) == 0 {
+		logger.Warn("文章内容元素不存在", zap.String("url", articleURL))
+		return "", fmt.Errorf("文章内容元素不存在，可能文章已删除或页面结构变化")
+	}
+
+	// 获取文章内容
+	var content string
+	err = chromedp.Run(ctx, chromedp.OuterHTML("#js_content", &content, chromedp.ByID))
+	if err != nil {
+		logger.Error("获取文章HTML内容失败", zap.String("url", articleURL), zap.Error(err))
+		return "", fmt.Errorf("获取HTML内容失败: %w", err)
+	}
+
+	// 检查内容是否为空
+	if strings.TrimSpace(content) == "" {
+		logger.Warn("文章内容为空", zap.String("url", articleURL))
+		return "", fmt.Errorf("文章内容为空")
+	}
+
+	logger.Info("成功获取文章内容",
+		zap.String("url", articleURL),
+		zap.Int("content_length", len(content)))
 
 	return content, nil
 }
 
 // GetToken 从当前页面提取token（用于API请求）
 func (b *Browser) GetToken() (string, error) {
+	// 加锁保护，避免并发请求导致封控
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
 	// Debug模式下不使用超时
 	var ctx context.Context
 	var cancel context.CancelFunc

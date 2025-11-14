@@ -1,0 +1,204 @@
+{{define "settings"}}
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Title}} - 微信公众号爬虫管理系统</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="/static/css/admin.css?v=1.0.0" rel="stylesheet">
+</head>
+<body>
+    {{template "navbar" .}}
+
+    <div class="container-fluid mt-4">
+<div class="row mb-4">
+    <div class="col-12">
+        <div>
+            <h2 class="mb-2">
+                <i class="bi bi-gear me-2"></i>系统设置
+            </h2>
+            <p class="text-muted mb-0">配置系统参数和运行环境</p>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-clock me-2"></i>爬取任务设置</h5>
+            </div>
+            <div class="card-body">
+                <form id="settingsForm">
+                    <div class="mb-3">
+                        <label for="crawlInterval" class="form-label">
+                            爬取间隔（分钟）<span class="text-danger">*</span>
+                        </label>
+                        <input type="number" class="form-control" id="crawlInterval" 
+                               value="{{.CrawlInterval}}" min="5" max="1440" required>
+                        <div class="form-text">
+                            建议设置不低于5分钟，避免频繁访问导致封控。设置范围：5-1440分钟
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="fetchCount" class="form-label">
+                            每次获取文章数量<span class="text-danger">*</span>
+                        </label>
+                        <input type="number" class="form-control" id="fetchCount" 
+                               value="{{.FetchCount}}" min="5" max="50" required>
+                        <div class="form-text">
+                            每次爬取时获取最新N篇文章，建议10-20篇。设置范围：5-50篇
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="timeout" class="form-label">
+                            请求超时时间（秒）<span class="text-danger">*</span>
+                        </label>
+                        <input type="number" class="form-control" id="timeout" 
+                               value="{{.Timeout}}" min="30" max="300" required>
+                        <div class="form-text">
+                            单次爬取操作的超时时间。设置范围：30-300秒
+                        </div>
+                    </div>
+
+                    <div class="alert alert-warning">
+                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        <strong>注意：</strong>修改设置后需要重启服务才能生效。
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <button type="button" class="btn btn-primary" onclick="saveSettings()">
+                            <i class="bi bi-check-circle me-2"></i>保存设置
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary" onclick="location.reload()">
+                            <i class="bi bi-arrow-clockwise me-2"></i>重置
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-database me-2"></i>数据库信息</h5>
+            </div>
+            <div class="card-body">
+                <table class="table">
+                    <tr>
+                        <th style="width: 200px;">数据库类型</th>
+                        <td>MongoDB</td>
+                    </tr>
+                    <tr>
+                        <th>数据库名称</th>
+                        <td><code>{{.DatabaseName}}</code></td>
+                    </tr>
+                    <tr>
+                        <th>连接状态</th>
+                        <td><span class="badge bg-success"><i class="bi bi-check-circle"></i> 已连接</span></td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-info-circle me-2"></i>系统信息</h5>
+            </div>
+            <div class="card-body">
+                <table class="table table-sm">
+                    <tr>
+                        <th>版本</th>
+                        <td>v1.0.0</td>
+                    </tr>
+                    <tr>
+                        <th>运行模式</th>
+                        <td><span class="badge bg-info">{{.ServerMode}}</span></td>
+                    </tr>
+                    <tr>
+                        <th>服务端口</th>
+                        <td><code>{{.ServerPort}}</code></td>
+                    </tr>
+                    <tr>
+                        <th>Go版本</th>
+                        <td>{{.GoVersion}}</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-shield-check me-2"></i>安全建议</h5>
+            </div>
+            <div class="card-body">
+                <ul class="small">
+                    <li>定期修改管理员密码</li>
+                    <li>不要在公网暴露管理后台</li>
+                    <li>定期备份MongoDB数据</li>
+                    <li>监控日志文件大小</li>
+                    <li>遵守微信平台爬取规范</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+function saveSettings() {
+    const interval = parseInt(document.getElementById('crawlInterval').value);
+    const fetchCount = parseInt(document.getElementById('fetchCount').value);
+    const timeout = parseInt(document.getElementById('timeout').value);
+    
+    if (interval < 5 || interval > 1440) {
+        showError('爬取间隔必须在5-1440分钟之间');
+        return;
+    }
+    
+    if (fetchCount < 5 || fetchCount > 50) {
+        showError('获取文章数量必须在5-50之间');
+        return;
+    }
+    
+    if (timeout < 30 || timeout > 300) {
+        showError('超时时间必须在30-300秒之间');
+        return;
+    }
+    
+    showLoading('正在保存设置...');
+    
+    axios.post('/admin/api/settings/update', {
+        crawl_interval: interval,
+        fetch_count: fetchCount,
+        timeout: timeout
+    })
+    .then(response => {
+        hideLoading();
+        if (response.data.code === 200) {
+            showSuccess('设置已保存，请重启服务使其生效');
+        } else {
+            showError(response.data.msg || '保存失败');
+        }
+    })
+    .catch(error => {
+        hideLoading();
+        showError('请求失败: ' + error.message);
+    });
+}
+</script>
+    </div>
+
+    {{template "footer" .}}
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <script src="/static/js/admin.js?v=1.0.0"></script>
+</body>
+</html>
+{{end}}
+
+

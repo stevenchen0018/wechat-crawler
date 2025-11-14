@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 
 	"wechat-crawler/internal/crawler"
@@ -128,8 +129,23 @@ func (s *CrawlerService) FetchLatestArticles(ctx context.Context, account *model
 		// 获取文章详细内容
 		content, err := s.browser.FetchArticleContent(item.ContentURL)
 		if err != nil {
-			logger.Warn("获取文章内容失败", zap.String("url", item.ContentURL), zap.Error(err))
-			content = "" // 即使获取内容失败也保存文章元数据
+			// 判断是否是文章已删除的错误
+			errMsg := err.Error()
+			if strings.Contains(errMsg, "已删除") ||
+				strings.Contains(errMsg, "不存在") ||
+				strings.Contains(errMsg, "元素不存在") {
+				logger.Warn("文章已删除或不可访问，跳过",
+					zap.String("title", item.Title),
+					zap.String("url", item.ContentURL),
+					zap.Error(err))
+				continue // 跳过已删除的文章，不保存
+			}
+			// 其他错误（如网络超时等），记录警告但保存文章元数据
+			logger.Warn("获取文章内容失败，仅保存元数据",
+				zap.String("title", item.Title),
+				zap.String("url", item.ContentURL),
+				zap.Error(err))
+			content = "" // 保存空内容
 		}
 
 		// 构造文章对象
@@ -188,38 +204,51 @@ func (s *CrawlerService) FetchAllAccounts(ctx context.Context) error {
 	}
 
 	logger.Info("待爬取公众号数量", zap.Int("count", len(accounts)))
-
-	// 使用goroutine和channel控制并发爬取
-	semaphore := make(chan struct{}, s.concurrent)
-	var wg sync.WaitGroup
-
+	//顺序爬取公号，否则会被封控
 	for _, account := range accounts {
-		wg.Add(1)
-		go func(acc *model.WeChatAccount) {
-			defer wg.Done()
-
-			// 获取信号量
-			semaphore <- struct{}{}
-			defer func() { <-semaphore }()
-
-			// 执行爬取
-			articles, err := s.FetchLatestArticles(ctx, acc)
-			if err != nil {
-				logger.Error("爬取公众号失败",
-					zap.String("account", acc.Name),
-					zap.Error(err))
-				return
-			}
-
-			if len(articles) > 0 {
-				logger.Info("发现新文章",
-					zap.String("account", acc.Name),
-					zap.Int("count", len(articles)))
-			}
-		}(account)
+		articles, err := s.FetchLatestArticles(ctx, account)
+		if err != nil {
+			logger.Error("爬取公众号失败", zap.String("account", account.Name), zap.Error(err))
+			continue
+		}
+		if len(articles) > 0 {
+			logger.Info("发现新文章",
+				zap.String("account", account.Name),
+				zap.Int("count", len(articles)))
+		}
 	}
 
-	wg.Wait()
+	// // 使用goroutine和channel控制并发爬取
+	// semaphore := make(chan struct{}, s.concurrent)
+	// var wg sync.WaitGroup
+
+	// for _, account := range accounts {
+	// 	wg.Add(1)
+	// 	go func(acc *model.WeChatAccount) {
+	// 		defer wg.Done()
+
+	// 		// 获取信号量
+	// 		semaphore <- struct{}{}
+	// 		defer func() { <-semaphore }()
+
+	// 		// 执行爬取
+	// 		articles, err := s.FetchLatestArticles(ctx, acc)
+	// 		if err != nil {
+	// 			logger.Error("爬取公众号失败",
+	// 				zap.String("account", acc.Name),
+	// 				zap.Error(err))
+	// 			return
+	// 		}
+
+	// 		if len(articles) > 0 {
+	// 			logger.Info("发现新文章",
+	// 				zap.String("account", acc.Name),
+	// 				zap.Int("count", len(articles)))
+	// 		}
+	// 	}(account)
+	// }
+
+	// wg.Wait()
 	logger.Info("定时爬取任务完成")
 	return nil
 }

@@ -1,0 +1,362 @@
+{{define "tasks"}}
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Title}} - 微信公众号爬虫管理系统</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="/static/css/admin.css?v=1.0.1" rel="stylesheet">
+</head>
+<body>
+    {{template "navbar" .}}
+
+    <div class="container-fluid mt-4">
+<div class="row mb-4">
+    <div class="col-12">
+        <div>
+            <h2 class="mb-2">
+                <i class="bi bi-clock-history me-2"></i>任务管理
+            </h2>
+            <p class="text-muted mb-0">监控和控制定时爬取任务</p>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-info-circle me-2"></i>定时任务状态</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-4">
+                    <label class="text-muted d-block mb-2" style="font-size: 0.9rem;">
+                        <i class="bi bi-clock me-1"></i>爬取间隔
+                    </label>
+                    <h3 style="color: #4facfe; font-weight: 700;">每 {{.CrawlInterval}} 分钟</h3>
+                </div>
+                <div class="mb-4">
+                    <label class="text-muted d-block mb-2" style="font-size: 0.9rem;">
+                        <i class="bi bi-activity me-1"></i>任务状态
+                    </label>
+                    <h4>
+                        <span class="badge" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); padding: 8px 16px;">
+                            <i class="bi bi-check-circle me-1"></i>运行中
+                        </span>
+                    </h4>
+                </div>
+                <div class="mb-0">
+                    <label class="text-muted d-block mb-2" style="font-size: 0.9rem;">
+                        <i class="bi bi-alarm me-1"></i>下次执行时间
+                    </label>
+                    <h5 style="color: #667eea; font-weight: 600;" id="nextRunTime">计算中...</h5>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-lightning me-2"></i>手动操作</h5>
+            </div>
+            <div class="card-body">
+                <p class="text-muted mb-4">
+                    <i class="bi bi-info-circle me-1"></i>点击下方按钮立即执行一次爬取任务，不会影响定时任务的正常执行。
+                </p>
+                <button onclick="triggerCrawl()" class="btn btn-primary btn-lg w-100">
+                    <i class="bi bi-play-circle me-2"></i>立即执行爬取任务
+                </button>
+                <div id="taskStatus" class="mt-3"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-journal-text me-2"></i>任务执行日志</h5>
+                <div class="d-flex gap-2 align-items-center">
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="autoRefresh" checked>
+                        <label class="form-check-label" for="autoRefresh">
+                            <small>自动刷新(5秒)</small>
+                        </label>
+                    </div>
+                    <button onclick="refreshLogs()" class="btn btn-sm btn-outline-primary">
+                        <i class="bi bi-arrow-clockwise"></i> 刷新
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <!-- 筛选工具栏 -->
+                <div class="row mb-3">
+                    <div class="col-md-3">
+                        <select class="form-select form-select-sm" id="logLevel" onchange="refreshLogs()">
+                            <option value="">所有级别</option>
+                            <option value="INFO">INFO</option>
+                            <option value="WARN">WARN</option>
+                            <option value="ERROR">ERROR</option>
+                            <option value="DEBUG">DEBUG</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <select class="form-select form-select-sm" id="logLines" onchange="refreshLogs()">
+                            <option value="100">最近 100 行</option>
+                            <option value="300">最近 300 行</option>
+                            <option value="500" selected>最近 500 行</option>
+                            <option value="1000">最近 1000 行</option>
+                            <option value="2000">最近 2000 行</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="input-group input-group-sm">
+                            <input type="text" class="form-control" id="logKeyword" placeholder="输入关键词搜索日志...">
+                            <button class="btn btn-outline-secondary" type="button" onclick="refreshLogs()">
+                                <i class="bi bi-search"></i>
+                            </button>
+                            <button class="btn btn-outline-secondary" type="button" onclick="clearKeyword()">
+                                <i class="bi bi-x"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 日志信息 -->
+                <div id="logInfo" class="alert alert-info mb-3" style="display: none;">
+                    <small>
+                        <i class="bi bi-info-circle me-1"></i>
+                        <span id="logStats"></span>
+                    </small>
+                </div>
+                
+                <!-- 日志内容 -->
+                <div id="logContent" class="log-viewer">
+                    <div class="text-center py-5">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">加载中...</span>
+                        </div>
+                        <p class="mt-3 mb-0 text-muted">正在加载日志...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+// 计算下次执行时间
+function calculateNextRun() {
+    const interval = {{.CrawlInterval}};
+    const now = new Date();
+    const minutes = now.getMinutes();
+    const nextMinutes = Math.ceil(minutes / interval) * interval;
+    const next = new Date(now);
+    
+    if (nextMinutes >= 60) {
+        next.setHours(next.getHours() + 1);
+        next.setMinutes(nextMinutes - 60);
+    } else {
+        next.setMinutes(nextMinutes);
+    }
+    next.setSeconds(0);
+    
+    document.getElementById('nextRunTime').textContent = next.toLocaleString('zh-CN');
+}
+
+calculateNextRun();
+setInterval(calculateNextRun, 1000);
+
+// 触发爬取任务
+function triggerCrawl() {
+    if (!window.confirm('确定要立即执行爬取任务吗？\n这可能需要几分钟时间。')) {
+        return;
+    }
+    
+    const statusDiv = document.getElementById('taskStatus');
+    statusDiv.innerHTML = '<div class="alert alert-info"><i class="bi bi-hourglass-split"></i> 任务执行中，请稍候...</div>';
+    
+    axios.post('/admin/api/tasks/trigger')
+        .then(response => {
+            if (response.data.code === 200) {
+                statusDiv.innerHTML = '<div class="alert alert-success"><i class="bi bi-check-circle"></i> 任务执行成功！</div>';
+                if (typeof showSuccess === 'function') {
+                    showSuccess('爬取任务已完成');
+                }
+            } else {
+                statusDiv.innerHTML = `<div class="alert alert-danger"><i class="bi bi-x-circle"></i> ${response.data.msg || '任务执行失败'}</div>`;
+                if (typeof showError === 'function') {
+                    showError(response.data.msg || '任务执行失败');
+                }
+            }
+        })
+        .catch(error => {
+            statusDiv.innerHTML = `<div class="alert alert-danger"><i class="bi bi-x-circle"></i> 请求失败: ${error.message}</div>`;
+            if (typeof showError === 'function') {
+                showError('请求失败: ' + error.message);
+            }
+        });
+}
+
+// ========== 日志查看功能 ==========
+let autoRefreshTimer = null;
+
+// 加载日志
+function refreshLogs() {
+    const level = document.getElementById('logLevel').value;
+    const lines = document.getElementById('logLines').value;
+    const keyword = document.getElementById('logKeyword').value.trim();
+    
+    const params = new URLSearchParams();
+    if (level) params.append('level', level);
+    if (lines) params.append('lines', lines);
+    if (keyword) params.append('keyword', keyword);
+    
+    const logContent = document.getElementById('logContent');
+    
+    axios.get('/admin/api/logs?' + params.toString())
+        .then(response => {
+            if (response.data.code === 200) {
+                const data = response.data.data;
+                displayLogs(data.logs, data.total, data.file_size);
+                
+                // 显示统计信息
+                const fileSize = (data.file_size / 1024).toFixed(2);
+                document.getElementById('logStats').textContent = 
+                    `共 ${data.total} 条日志，文件大小: ${fileSize} KB`;
+                document.getElementById('logInfo').style.display = 'block';
+            } else {
+                logContent.innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        ${response.data.msg || '加载日志失败'}
+                    </div>
+                `;
+            }
+        })
+        .catch(error => {
+            logContent.innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="bi bi-exclamation-triangle me-2"></i>
+                    请求失败: ${error.message}
+                </div>
+            `;
+        });
+}
+
+// 显示日志内容
+function displayLogs(logs, total, fileSize) {
+    const logContent = document.getElementById('logContent');
+    
+    if (!logs || logs.length === 0) {
+        logContent.innerHTML = `
+            <div class="text-center py-5">
+                <i class="bi bi-inbox" style="font-size: 3rem; color: #94a3b8;"></i>
+                <p class="mt-3 mb-0 text-muted">暂无日志数据</p>
+            </div>
+        `;
+        return;
+    }
+    
+    // 构建日志HTML
+    let html = '<div class="log-lines">';
+    logs.forEach((line, index) => {
+        if (!line.trim()) return;
+        
+        let lineClass = 'log-line';
+        const lineUpper = line.toUpperCase();
+        
+        if (lineUpper.includes('ERROR')) {
+            lineClass += ' log-error';
+        } else if (lineUpper.includes('WARN')) {
+            lineClass += ' log-warn';
+        } else if (lineUpper.includes('INFO')) {
+            lineClass += ' log-info';
+        } else if (lineUpper.includes('DEBUG')) {
+            lineClass += ' log-debug';
+        }
+        
+        html += `<div class="${lineClass}">${escapeHtml(line)}</div>`;
+    });
+    html += '</div>';
+    
+    logContent.innerHTML = html;
+    
+    // 自动滚动到底部
+    logContent.scrollTop = logContent.scrollHeight;
+}
+
+// HTML转义
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// 清除关键词
+function clearKeyword() {
+    document.getElementById('logKeyword').value = '';
+    refreshLogs();
+}
+
+// 自动刷新控制
+document.getElementById('autoRefresh').addEventListener('change', function() {
+    if (this.checked) {
+        startAutoRefresh();
+    } else {
+        stopAutoRefresh();
+    }
+});
+
+function startAutoRefresh() {
+    stopAutoRefresh(); // 先清除之前的定时器
+    refreshLogs(); // 立即刷新一次
+    autoRefreshTimer = setInterval(refreshLogs, 5000); // 每5秒刷新一次
+}
+
+function stopAutoRefresh() {
+    if (autoRefreshTimer) {
+        clearInterval(autoRefreshTimer);
+        autoRefreshTimer = null;
+    }
+}
+
+// 页面加载完成后初始化
+document.addEventListener('DOMContentLoaded', function() {
+    // 初始加载日志
+    refreshLogs();
+    
+    // 启动自动刷新
+    if (document.getElementById('autoRefresh').checked) {
+        startAutoRefresh();
+    }
+    
+    // 关键词输入框回车搜索
+    document.getElementById('logKeyword').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            refreshLogs();
+        }
+    });
+});
+
+// 页面卸载时清除定时器
+window.addEventListener('beforeunload', function() {
+    stopAutoRefresh();
+});
+</script>
+    </div>
+
+    {{template "footer" .}}
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <script src="/static/js/admin.js?v=1.0.1"></script>
+</body>
+</html>
+{{end}}
+
+
+
