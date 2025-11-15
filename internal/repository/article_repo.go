@@ -111,6 +111,62 @@ func (r *ArticleRepo) ListByAccountID(ctx context.Context, accountID primitive.O
 	return articles, total, nil
 }
 
+// ListWithFilter 根据条件查询文章列表（支持关键词、时间范围、公众号筛选）
+func (r *ArticleRepo) ListWithFilter(ctx context.Context, accountID string, keyword string, startTime, endTime int64, page, pageSize int64) ([]*model.Article, int64, error) {
+	// 构建查询条件
+	filter := bson.M{}
+
+	// 公众号筛选
+	if accountID != "" {
+		objectID, err := primitive.ObjectIDFromHex(accountID)
+		if err == nil {
+			filter["account_id"] = objectID
+		}
+	}
+
+	// 关键词搜索（标题）
+	if keyword != "" {
+		filter["title"] = bson.M{"$regex": keyword, "$options": "i"} // 不区分大小写
+	}
+
+	// 时间范围筛选
+	if startTime > 0 || endTime > 0 {
+		timeFilter := bson.M{}
+		if startTime > 0 {
+			timeFilter["$gte"] = startTime
+		}
+		if endTime > 0 {
+			timeFilter["$lte"] = endTime
+		}
+		filter["publish_time"] = timeFilter
+	}
+
+	// 计算总数
+	total, err := r.collection.CountDocuments(ctx, filter)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	// 查询列表
+	opts := options.Find().
+		SetSort(bson.D{{Key: "publish_time", Value: -1}}).
+		SetSkip((page - 1) * pageSize).
+		SetLimit(pageSize)
+
+	cursor, err := r.collection.Find(ctx, filter, opts)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer cursor.Close(ctx)
+
+	var articles []*model.Article
+	if err := cursor.All(ctx, &articles); err != nil {
+		return nil, 0, err
+	}
+
+	return articles, total, nil
+}
+
 // List 查询所有文章（分页）
 func (r *ArticleRepo) List(ctx context.Context, page, pageSize int64) ([]*model.Article, int64, error) {
 	// 计算总数

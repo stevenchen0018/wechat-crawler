@@ -63,10 +63,10 @@ func main() {
 	logger.Info("浏览器实例创建成功")
 
 	// 执行登录
-	if err := browser.Login(); err != nil {
-		logger.Fatal("登录微信公众号平台失败", zap.Error(err))
-	}
-	logger.Info("微信公众号平台登录成功")
+	// if err := browser.Login(); err != nil {
+	// 	logger.Fatal("登录微信公众号平台失败", zap.Error(err))
+	// }
+	// logger.Info("微信公众号平台登录成功")
 
 	// 创建爬虫服务
 	crawlerService := service.NewCrawlerService(
@@ -74,9 +74,13 @@ func main() {
 		viper.GetInt("crawler.concurrent"),
 	)
 
+	// 创建飞书服务
+	feishuService := service.NewFeishuService()
+
 	// 启动定时任务
 	cronScheduler := scheduler.NewScheduler(
 		crawlerService,
+		feishuService,
 		viper.GetInt("crawler.interval"),
 	)
 	if err := cronScheduler.Start(); err != nil {

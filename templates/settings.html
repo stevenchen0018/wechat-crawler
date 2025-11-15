@@ -82,6 +82,74 @@
             </div>
         </div>
 
+        <!-- 飞书通知配置 -->
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-bell me-2"></i>飞书通知设置</h5>
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="feishuEnabled" 
+                           {{if .FeishuConfig.Enabled}}checked{{end}}>
+                    <label class="form-check-label" for="feishuEnabled">启用通知</label>
+                </div>
+            </div>
+            <div class="card-body">
+                <form id="feishuForm">
+                    <div class="mb-3">
+                        <label for="webhookURL" class="form-label">
+                            Webhook地址<span class="text-danger">*</span>
+                        </label>
+                        <input type="url" class="form-control" id="webhookURL" 
+                               value="{{.FeishuConfig.WebhookURL}}" 
+                               placeholder="https://open.feishu.cn/open-apis/bot/v2/hook/...">
+                        <div class="form-text">
+                            飞书机器人的Webhook地址，用于接收文章推送通知
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="notifyTitle" class="form-label">通知标题</label>
+                        <input type="text" class="form-control" id="notifyTitle" 
+                               value="{{if .FeishuConfig.NotifyTitle}}{{.FeishuConfig.NotifyTitle}}{{else}}微信公众号文章推送{{end}}" 
+                               placeholder="微信公众号文章推送">
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="notifyPeriod" class="form-label">通知周期</label>
+                        <select class="form-select" id="notifyPeriod">
+                            <option value="hourly" {{if eq .FeishuConfig.NotifyPeriod "hourly"}}selected{{end}}>每小时</option>
+                            <option value="daily" {{if eq .FeishuConfig.NotifyPeriod "daily"}}selected{{end}}>每天</option>
+                        </select>
+                        <div class="form-text">
+                            选择推送文章的时间周期
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="notifyTime" class="form-label">通知时间</label>
+                        <input type="time" class="form-control" id="notifyTime" 
+                               value="{{if .FeishuConfig.NotifyTime}}{{.FeishuConfig.NotifyTime}}{{else}}09:00{{end}}">
+                        <div class="form-text">
+                            每天定时推送的时间点（24小时制）
+                        </div>
+                    </div>
+
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle me-2"></i>
+                        <strong>说明：</strong>系统会在设定的时间将指定周期内的新文章推送到飞书群
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <button type="button" class="btn btn-primary" onclick="saveFeishuConfig()">
+                            <i class="bi bi-check-circle me-2"></i>保存配置
+                        </button>
+                        <button type="button" class="btn btn-outline-info" onclick="testFeishuNotification()">
+                            <i class="bi bi-send me-2"></i>测试通知
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
         <div class="card">
             <div class="card-header">
                 <h5 class="mb-0"><i class="bi bi-database me-2"></i>数据库信息</h5>
@@ -182,6 +250,73 @@ function saveSettings() {
             showSuccess('设置已保存，请重启服务使其生效');
         } else {
             showError(response.data.msg || '保存失败');
+        }
+    })
+    .catch(error => {
+        hideLoading();
+        showError('请求失败: ' + error.message);
+    });
+}
+
+// 保存飞书配置
+function saveFeishuConfig() {
+    const webhookURL = document.getElementById('webhookURL').value.trim();
+    const enabled = document.getElementById('feishuEnabled').checked;
+    const notifyTime = document.getElementById('notifyTime').value;
+    const notifyTitle = document.getElementById('notifyTitle').value.trim();
+    const notifyPeriod = document.getElementById('notifyPeriod').value;
+    
+    if (enabled && !webhookURL) {
+        showError('启用通知时必须填写Webhook地址');
+        return;
+    }
+    
+    if (webhookURL && !webhookURL.startsWith('https://')) {
+        showError('Webhook地址必须以https://开头');
+        return;
+    }
+    
+    showLoading('正在保存飞书配置...');
+    
+    axios.post('/admin/api/feishu/save', {
+        webhook_url: webhookURL,
+        enabled: enabled,
+        notify_time: notifyTime,
+        notify_title: notifyTitle || '微信公众号文章推送',
+        notify_period: notifyPeriod
+    })
+    .then(response => {
+        hideLoading();
+        if (response.data.code === 200) {
+            showSuccess('飞书配置已保存');
+        } else {
+            showError(response.data.msg || '保存失败');
+        }
+    })
+    .catch(error => {
+        hideLoading();
+        showError('请求失败: ' + error.message);
+    });
+}
+
+// 测试飞书通知
+function testFeishuNotification() {
+    const webhookURL = document.getElementById('webhookURL').value.trim();
+    
+    if (!webhookURL) {
+        showError('请先配置Webhook地址');
+        return;
+    }
+    
+    showLoading('正在发送测试通知...');
+    
+    axios.post('/admin/api/feishu/test')
+    .then(response => {
+        hideLoading();
+        if (response.data.code === 200) {
+            showSuccess('测试通知已发送，请查看飞书群消息');
+        } else {
+            showError(response.data.msg || '发送失败');
         }
     })
     .catch(error => {

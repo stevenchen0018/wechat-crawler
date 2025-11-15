@@ -268,6 +268,11 @@ func (s *CrawlerService) GetArticleList(ctx context.Context, accountID string, p
 	return s.articleRepo.List(ctx, page, pageSize)
 }
 
+// GetArticleListWithFilter 获取文章列表（支持筛选条件）
+func (s *CrawlerService) GetArticleListWithFilter(ctx context.Context, accountID string, keyword string, startTime, endTime int64, page, pageSize int64) ([]*model.Article, int64, error) {
+	return s.articleRepo.ListWithFilter(ctx, accountID, keyword, startTime, endTime, page, pageSize)
+}
+
 // GetAccount 获取公众号详情
 func (s *CrawlerService) GetAccount(ctx context.Context, id string) (*model.WeChatAccount, error) {
 	objectID, err := primitive.ObjectIDFromHex(id)

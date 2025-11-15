@@ -15,14 +15,16 @@ import (
 type Scheduler struct {
 	cron           *cron.Cron
 	crawlerService *service.CrawlerService
+	feishuService  *service.FeishuService
 	interval       int // 爬取间隔（分钟）
 }
 
 // NewScheduler 创建调度器实例
-func NewScheduler(crawlerService *service.CrawlerService, interval int) *Scheduler {
+func NewScheduler(crawlerService *service.CrawlerService, feishuService *service.FeishuService, interval int) *Scheduler {
 	return &Scheduler{
 		cron:           cron.New(cron.WithSeconds()),
 		crawlerService: crawlerService,
+		feishuService:  feishuService,
 		interval:       interval,
 	}
 }
@@ -38,23 +40,75 @@ func (s *Scheduler) Start() error {
 	}
 	// cronExpr := fmt.Sprintf("0 */%d * * * *", s.interval)
 
-	logger.Info("配置定时任务",
+	logger.Info("配置爬取任务定时器",
 		zap.Int("interval_minutes", s.interval),
 		zap.String("cron_expr", cronExpr))
 
-	// 添加定时任务
+	// 添加爬取定时任务
 	_, err = s.cron.AddFunc(cronExpr, func() {
 		s.executeCrawlTask()
 	})
 
 	if err != nil {
-		logger.Error("添加定时任务失败", zap.Error(err))
+		logger.Error("添加爬取定时任务失败", zap.Error(err))
 		return err
+	}
+
+	// 添加飞书通知定时任务
+	if err := s.setupFeishuNotifyTask(); err != nil {
+		logger.Warn("配置飞书通知任务失败", zap.Error(err))
 	}
 
 	// 启动调度器
 	s.cron.Start()
 	logger.Info("定时任务调度器已启动")
+
+	return nil
+}
+
+// setupFeishuNotifyTask 配置飞书通知定时任务
+func (s *Scheduler) setupFeishuNotifyTask() error {
+	ctx := context.Background()
+
+	// 获取飞书配置
+	config, err := s.feishuService.GetConfig(ctx)
+	if err != nil {
+		return fmt.Errorf("获取飞书配置失败: %w", err)
+	}
+
+	if !config.Enabled {
+		logger.Info("飞书通知未启用，跳过配置定时任务")
+		return nil
+	}
+
+	// 构建cron表达式
+	var cronExpr string
+	if config.NotifyPeriod == "hourly" {
+		// 每小时执行一次
+		cronExpr = "0 0 * * * *"
+	} else {
+		// 每天在指定时间执行
+		// 解析时间字符串 "HH:MM"
+		if config.NotifyTime == "" {
+			config.NotifyTime = "09:00"
+		}
+		// 格式：秒 分 时 日 月 周
+		cronExpr = fmt.Sprintf("0 %s * * *", config.NotifyTime)
+	}
+
+	logger.Info("配置飞书通知定时器",
+		zap.String("period", config.NotifyPeriod),
+		zap.String("time", config.NotifyTime),
+		zap.String("cron_expr", cronExpr))
+
+	// 添加定时任务
+	_, err = s.cron.AddFunc(cronExpr, func() {
+		s.executeFeishuNotifyTask()
+	})
+
+	if err != nil {
+		return fmt.Errorf("添加飞书通知定时任务失败: %w", err)
+	}
 
 	return nil
 }
@@ -80,10 +134,28 @@ func (s *Scheduler) executeCrawlTask() {
 	logger.Info("========== 定时爬取任务执行完成 ==========")
 }
 
+// executeFeishuNotifyTask 执行飞书通知任务
+func (s *Scheduler) executeFeishuNotifyTask() {
+	logger.Info("========== 开始执行飞书通知任务 ==========")
+
+	ctx := context.Background()
+	if err := s.feishuService.SendArticleNotification(ctx); err != nil {
+		logger.Error("飞书通知任务执行失败", zap.Error(err))
+	}
+
+	logger.Info("========== 飞书通知任务执行完成 ==========")
+}
+
 // RunOnce 立即执行一次爬取任务（用于测试或手动触发）
 func (s *Scheduler) RunOnce() {
 	logger.Info("手动触发爬取任务")
 	s.executeCrawlTask()
+}
+
+// ReloadFeishuTask 重新加载飞书通知任务（配置更新后调用）
+func (s *Scheduler) ReloadFeishuTask() error {
+	logger.Info("重新加载飞书通知定时任务")
+	return s.setupFeishuNotifyTask()
 }
 
 func (s *Scheduler) BuildCronExpr(interval int) (string, error) {

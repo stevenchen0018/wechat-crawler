@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"time"
 
 	"wechat-crawler/internal/middleware"
 	"wechat-crawler/internal/model"
@@ -27,13 +28,15 @@ import (
 // AdminHandler 管理后台处理器
 type AdminHandler struct {
 	crawlerService *service.CrawlerService
+	feishuService  *service.FeishuService
 	sessionStore   *session.Store
 }
 
 // NewAdminHandler 创建管理后台处理器
-func NewAdminHandler(crawlerService *service.CrawlerService, sessionStore *session.Store) *AdminHandler {
+func NewAdminHandler(crawlerService *service.CrawlerService, feishuService *service.FeishuService, sessionStore *session.Store) *AdminHandler {
 	return &AdminHandler{
 		crawlerService: crawlerService,
+		feishuService:  feishuService,
 		sessionStore:   sessionStore,
 	}
 }
@@ -191,24 +194,27 @@ func (h *AdminHandler) ShowArticles(c *gin.Context) {
 	pageSize := int64(20)
 	accountID := c.Query("account_id")
 	keyword := c.Query("keyword")
+	startTimeStr := c.Query("start_time")
+	endTimeStr := c.Query("end_time")
 
-	// 获取文章列表
-	articles, total, err := h.crawlerService.GetArticleList(ctx, accountID, page, pageSize)
-	if err != nil {
-		logger.Error("获取文章列表失败", zap.Error(err))
+	// 解析时间范围
+	var startTime, endTime int64
+	if startTimeStr != "" {
+		if t, err := time.Parse("2006-01-02", startTimeStr); err == nil {
+			startTime = t.Unix()
+		}
+	}
+	if endTimeStr != "" {
+		if t, err := time.Parse("2006-01-02", endTimeStr); err == nil {
+			// 设置为当天的23:59:59
+			endTime = t.Add(24*time.Hour - time.Second).Unix()
+		}
 	}
 
-	// 如果有搜索关键词，进行过滤
-	// TODO: 后期可以在service层实现数据库搜索
-	if keyword != "" {
-		keyword = strings.ToLower(keyword)
-		var filteredArticles []*model.Article
-		for _, article := range articles {
-			if strings.Contains(strings.ToLower(article.Title), keyword) {
-				filteredArticles = append(filteredArticles, article)
-			}
-		}
-		articles = filteredArticles
+	// 获取文章列表（使用新的过滤方法）
+	articles, total, err := h.crawlerService.GetArticleListWithFilter(ctx, accountID, keyword, startTime, endTime, page, pageSize)
+	if err != nil {
+		logger.Error("获取文章列表失败", zap.Error(err))
 	}
 
 	// 获取公众号列表（用于筛选）
@@ -235,6 +241,81 @@ func (h *AdminHandler) ShowArticles(c *gin.Context) {
 		"Pages":           pages,
 		"FilterAccountID": accountID,
 		"SearchKeyword":   keyword,
+		"StartTime":       startTimeStr,
+		"EndTime":         endTimeStr,
+	})
+}
+
+// ShowAccountArticles 显示某个公众号的文章列表
+func (h *AdminHandler) ShowAccountArticles(c *gin.Context) {
+	ctx := context.Background()
+	accountID := c.Param("id")
+
+	// 获取公众号信息
+	account, err := h.crawlerService.GetAccount(ctx, accountID)
+	if err != nil {
+		logger.Error("获取公众号信息失败", zap.Error(err))
+		c.HTML(http.StatusNotFound, "error", gin.H{
+			"Title":   "错误",
+			"Message": "公众号不存在",
+		})
+		return
+	}
+
+	// 获取分页参数
+	pageInt, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	page := int64(pageInt)
+	pageSize := int64(20)
+	keyword := c.Query("keyword")
+	startTimeStr := c.Query("start_time")
+	endTimeStr := c.Query("end_time")
+
+	// 解析时间范围
+	var startTime, endTime int64
+	if startTimeStr != "" {
+		if t, err := time.Parse("2006-01-02", startTimeStr); err == nil {
+			startTime = t.Unix()
+		}
+	}
+	if endTimeStr != "" {
+		if t, err := time.Parse("2006-01-02", endTimeStr); err == nil {
+			endTime = t.Add(24*time.Hour - time.Second).Unix()
+		}
+	}
+
+	// 获取文章列表
+	articles, total, err := h.crawlerService.GetArticleListWithFilter(ctx, accountID, keyword, startTime, endTime, page, pageSize)
+	if err != nil {
+		logger.Error("获取文章列表失败", zap.Error(err))
+	}
+
+	// 获取所有公众号列表（用于筛选下拉框）
+	accounts, _ := h.crawlerService.GetAccountList(ctx)
+
+	// 计算总页数
+	totalPages := int((total + pageSize - 1) / pageSize)
+
+	// 生成页码列表
+	var pages []int
+	for i := 1; i <= totalPages && i <= 10; i++ {
+		pages = append(pages, i)
+	}
+
+	c.HTML(http.StatusOK, "articles", gin.H{
+		"Title":           account.Name + " - 文章列表",
+		"Active":          "accounts",
+		"IsLogin":         true,
+		"Username":        middleware.GetUsername(c),
+		"Articles":        articles,
+		"Accounts":        accounts,
+		"CurrentAccount":  account,
+		"Page":            pageInt,
+		"TotalPages":      totalPages,
+		"Pages":           pages,
+		"FilterAccountID": accountID,
+		"SearchKeyword":   keyword,
+		"StartTime":       startTimeStr,
+		"EndTime":         endTimeStr,
 	})
 }
 
@@ -252,6 +333,20 @@ func (h *AdminHandler) ShowTasks(c *gin.Context) {
 
 // ShowSettings 显示系统设置页面
 func (h *AdminHandler) ShowSettings(c *gin.Context) {
+	ctx := context.Background()
+
+	// 获取飞书配置
+	feishuConfig, err := h.feishuService.GetConfig(ctx)
+	if err != nil {
+		logger.Warn("获取飞书配置失败", zap.Error(err))
+		// 使用默认配置
+		feishuConfig = &model.FeishuConfig{
+			Enabled:      false,
+			NotifyTime:   "09:00",
+			NotifyTitle:  "微信公众号文章推送",
+			NotifyPeriod: "daily",
+		}
+	}
 
 	c.HTML(http.StatusOK, "settings", gin.H{
 		"Title":         "系统设置",
@@ -265,6 +360,7 @@ func (h *AdminHandler) ShowSettings(c *gin.Context) {
 		"ServerMode":    viper.GetString("server.mode"),
 		"ServerPort":    viper.GetString("server.port"),
 		"GoVersion":     runtime.Version(),
+		"FeishuConfig":  feishuConfig,
 	})
 }
 
@@ -444,6 +540,65 @@ func (h *AdminHandler) GetLogs(c *gin.Context) {
 		"file_size": fileSize,
 		"file_path": logPath,
 	})
+}
+
+// SaveFeishuConfig 保存飞书配置
+func (h *AdminHandler) SaveFeishuConfig(c *gin.Context) {
+	ctx := context.Background()
+
+	var req struct {
+		WebhookURL   string `json:"webhook_url"`
+		Enabled      bool   `json:"enabled"`
+		NotifyTime   string `json:"notify_time"`
+		NotifyTitle  string `json:"notify_title"`
+		NotifyPeriod string `json:"notify_period"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, http.StatusBadRequest, "参数错误")
+		return
+	}
+
+	// 验证参数
+	if req.Enabled && req.WebhookURL == "" {
+		response.Error(c, http.StatusBadRequest, "启用通知时必须填写Webhook地址")
+		return
+	}
+
+	// 构建配置对象
+	config := &model.FeishuConfig{
+		WebhookURL:   req.WebhookURL,
+		Enabled:      req.Enabled,
+		NotifyTime:   req.NotifyTime,
+		NotifyTitle:  req.NotifyTitle,
+		NotifyPeriod: req.NotifyPeriod,
+	}
+
+	if err := h.feishuService.SaveConfig(ctx, config); err != nil {
+		logger.Error("保存飞书配置失败", zap.Error(err))
+		response.Error(c, http.StatusInternalServerError, "保存配置失败")
+		return
+	}
+
+	logger.Info("保存飞书配置",
+		zap.String("operator", middleware.GetUsername(c)),
+		zap.Bool("enabled", req.Enabled))
+
+	response.Success(c, gin.H{"msg": "保存成功"})
+}
+
+// TestFeishuNotification 测试飞书通知
+func (h *AdminHandler) TestFeishuNotification(c *gin.Context) {
+	ctx := context.Background()
+
+	if err := h.feishuService.TestNotification(ctx); err != nil {
+		logger.Error("测试飞书通知失败", zap.Error(err))
+		response.Error(c, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	logger.Info("测试飞书通知", zap.String("operator", middleware.GetUsername(c)))
+	response.Success(c, gin.H{"msg": "测试通知已发送"})
 }
 
 // getProjectRoot 获取项目根目录（包含go.mod的目录）

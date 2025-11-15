@@ -1,1 +1,28 @@
 
+{"level":"INFO","time":"2025-11-15T11:10:54.787+0800","caller":"cmd/main.go:39","msg":"========== 微信公众号爬虫系统启动 =========="}
+{"level":"INFO","time":"2025-11-15T11:10:54.797+0800","caller":"cmd/main.go:50","msg":"MongoDB连接成功"}
+{"level":"INFO","time":"2025-11-15T11:10:54.797+0800","caller":"crawler/browser.go:48","msg":"🔍 Debug模式已启用：浏览器将保持打开直到手动关闭"}
+{"level":"INFO","time":"2025-11-15T11:10:54.798+0800","caller":"cmd/main.go:63","msg":"浏览器实例创建成功"}
+{"level":"INFO","time":"2025-11-15T11:10:54.798+0800","caller":"scheduler/cron_job.go:41","msg":"配置定时任务","interval_minutes":480,"cron_expr":"0 0 */8 * * *"}
+{"level":"INFO","time":"2025-11-15T11:10:54.798+0800","caller":"scheduler/cron_job.go:57","msg":"定时任务调度器已启动"}
+{"level":"INFO","time":"2025-11-15T11:10:54.800+0800","caller":"cmd/main.go:96","msg":"HTTP服务启动","address":":8081"}
+{"level":"INFO","time":"2025-11-15T11:11:05.773+0800","caller":"handler/admin_handler.go:110","msg":"用户登录成功","username":"admin"}
+{"level":"INFO","time":"2025-11-15T22:48:20.250+0800","caller":"cmd/main.go:39","msg":"========== 微信公众号爬虫系统启动 =========="}
+{"level":"INFO","time":"2025-11-15T22:48:20.264+0800","caller":"cmd/main.go:50","msg":"MongoDB连接成功"}
+{"level":"INFO","time":"2025-11-15T22:48:20.264+0800","caller":"crawler/browser.go:48","msg":"🔍 Debug模式已启用：浏览器将保持打开直到手动关闭"}
+{"level":"INFO","time":"2025-11-15T22:48:20.264+0800","caller":"cmd/main.go:63","msg":"浏览器实例创建成功"}
+{"level":"INFO","time":"2025-11-15T22:48:20.264+0800","caller":"scheduler/cron_job.go:41","msg":"配置定时任务","interval_minutes":480,"cron_expr":"0 0 */8 * * *"}
+{"level":"INFO","time":"2025-11-15T22:48:20.264+0800","caller":"scheduler/cron_job.go:57","msg":"定时任务调度器已启动"}
+{"level":"INFO","time":"2025-11-15T22:48:20.266+0800","caller":"cmd/main.go:96","msg":"HTTP服务启动","address":":8081"}
+{"level":"INFO","time":"2025-11-15T22:48:35.392+0800","caller":"handler/admin_handler.go:110","msg":"用户登录成功","username":"admin"}
+{"level":"INFO","time":"2025-11-15T22:49:10.804+0800","caller":"handler/admin_handler.go:110","msg":"用户登录成功","username":"admin"}
+{"level":"INFO","time":"2025-11-15T23:05:56.687+0800","caller":"cmd/main.go:39","msg":"========== 微信公众号爬虫系统启动 =========="}
+{"level":"INFO","time":"2025-11-15T23:05:56.700+0800","caller":"cmd/main.go:50","msg":"MongoDB连接成功"}
+{"level":"INFO","time":"2025-11-15T23:05:56.700+0800","caller":"crawler/browser.go:48","msg":"🔍 Debug模式已启用：浏览器将保持打开直到手动关闭"}
+{"level":"INFO","time":"2025-11-15T23:05:56.700+0800","caller":"cmd/main.go:63","msg":"浏览器实例创建成功"}
+{"level":"INFO","time":"2025-11-15T23:05:56.700+0800","caller":"scheduler/cron_job.go:43","msg":"配置爬取任务定时器","interval_minutes":480,"cron_expr":"0 0 */8 * * *"}
+{"level":"INFO","time":"2025-11-15T23:05:56.705+0800","caller":"scheduler/cron_job.go:80","msg":"飞书通知未启用，跳过配置定时任务"}
+{"level":"INFO","time":"2025-11-15T23:05:56.705+0800","caller":"scheduler/cron_job.go:64","msg":"定时任务调度器已启动"}
+{"level":"INFO","time":"2025-11-15T23:05:56.707+0800","caller":"cmd/main.go:100","msg":"HTTP服务启动","address":":8081"}
+{"level":"INFO","time":"2025-11-15T23:06:08.408+0800","caller":"handler/admin_handler.go:113","msg":"用户登录成功","username":"admin"}
+{"level":"INFO","time":"2025-11-15T23:06:58.796+0800","caller":"handler/admin_handler.go:583","msg":"保存飞书配置","operator":"admin","enabled":false}

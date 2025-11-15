@@ -17,14 +17,28 @@
     <div class="col-12">
         <div>
             <h2 class="mb-2">
-                <i class="bi bi-file-earmark-text me-2"></i>文章管理
+                <i class="bi bi-file-earmark-text me-2"></i>
+                {{if .CurrentAccount}}
+                    {{.CurrentAccount.Name}} - 文章列表
+                {{else}}
+                    文章管理
+                {{end}}
             </h2>
-            <p class="text-muted mb-0">查看和管理已采集的文章</p>
+            <p class="text-muted mb-0">
+                {{if .CurrentAccount}}
+                    <a href="/admin/accounts" class="text-decoration-none">
+                        <i class="bi bi-arrow-left me-1"></i>返回公众号列表
+                    </a>
+                {{else}}
+                    查看和管理已采集的文章
+                {{end}}
+            </p>
         </div>
     </div>
 </div>
 
-<div class="row mb-4">
+<div class="row mb-3">
+    {{if .CurrentAccount}}
     <div class="col-md-5">
         <div class="input-group">
             <span class="input-group-text"><i class="bi bi-search"></i></span>
@@ -32,8 +46,29 @@
                    placeholder="搜索文章标题..." value="{{.SearchKeyword}}">
         </div>
     </div>
-    <div class="col-md-4">
-        <select class="form-select" id="accountFilter" onchange="filterByAccount()">
+    <div class="col-md-3">
+        <input type="date" class="form-control" id="startTime" 
+               placeholder="开始日期" value="{{.StartTime}}">
+    </div>
+    <div class="col-md-3">
+        <input type="date" class="form-control" id="endTime" 
+               placeholder="结束日期" value="{{.EndTime}}">
+    </div>
+    <div class="col-md-1">
+        <button class="btn btn-primary w-100" onclick="doSearch()">
+            <i class="bi bi-search"></i>
+        </button>
+    </div>
+    {{else}}
+    <div class="col-md-3">
+        <div class="input-group">
+            <span class="input-group-text"><i class="bi bi-search"></i></span>
+            <input type="text" class="form-control" id="searchInput" 
+                   placeholder="搜索文章标题..." value="{{.SearchKeyword}}">
+        </div>
+    </div>
+    <div class="col-md-3">
+        <select class="form-select" id="accountFilter">
             <option value="">全部公众号</option>
             {{range .Accounts}}
             <option value="{{.ID.Hex}}" {{if eq $.FilterAccountID .ID.Hex}}selected{{end}}>
@@ -42,10 +77,49 @@
             {{end}}
         </select>
     </div>
-    <div class="col-md-3">
+    <div class="col-md-2">
+        <input type="date" class="form-control" id="startTime" 
+               placeholder="开始日期" value="{{.StartTime}}">
+    </div>
+    <div class="col-md-2">
+        <input type="date" class="form-control" id="endTime" 
+               placeholder="结束日期" value="{{.EndTime}}">
+    </div>
+    <div class="col-md-2">
         <button class="btn btn-primary w-100" onclick="doSearch()">
             <i class="bi bi-search me-1"></i>搜索
         </button>
+    </div>
+    {{end}}
+</div>
+
+<div class="row mb-2">
+    <div class="col-12">
+        <div class="d-flex gap-2">
+            {{if .SearchKeyword}}
+            <span class="badge bg-secondary">
+                关键词: {{.SearchKeyword}}
+                <i class="bi bi-x-circle ms-1" style="cursor: pointer;" onclick="clearFilter('keyword')"></i>
+            </span>
+            {{end}}
+            {{if .StartTime}}
+            <span class="badge bg-secondary">
+                开始日期: {{.StartTime}}
+                <i class="bi bi-x-circle ms-1" style="cursor: pointer;" onclick="clearFilter('start_time')"></i>
+            </span>
+            {{end}}
+            {{if .EndTime}}
+            <span class="badge bg-secondary">
+                结束日期: {{.EndTime}}
+                <i class="bi bi-x-circle ms-1" style="cursor: pointer;" onclick="clearFilter('end_time')"></i>
+            </span>
+            {{end}}
+            {{if or .SearchKeyword .StartTime .EndTime (and (not .CurrentAccount) .FilterAccountID)}}
+            <button class="btn btn-sm btn-outline-secondary" onclick="clearAllFilters()">
+                <i class="bi bi-x-circle me-1"></i>清除所有筛选
+            </button>
+            {{end}}
+        </div>
     </div>
 </div>
 
@@ -98,12 +172,12 @@
                         <ul class="pagination mb-0">
                             <!-- 首页 -->
                             <li class="page-item {{if eq .Page 1}}disabled{{end}}">
-                                <a class="page-link" href="?page=1{{if .FilterAccountID}}&account_id={{.FilterAccountID}}{{end}}">首页</a>
+                                <a class="page-link" href="?page=1{{if .FilterAccountID}}&account_id={{.FilterAccountID}}{{end}}{{if .SearchKeyword}}&keyword={{.SearchKeyword}}{{end}}{{if .StartTime}}&start_time={{.StartTime}}{{end}}{{if .EndTime}}&end_time={{.EndTime}}{{end}}">首页</a>
                             </li>
                             
                             <!-- 上一页 -->
                             <li class="page-item {{if eq .Page 1}}disabled{{end}}">
-                                <a class="page-link" href="?page={{sub .Page 1}}{{if .FilterAccountID}}&account_id={{.FilterAccountID}}{{end}}">
+                                <a class="page-link" href="?page={{sub .Page 1}}{{if .FilterAccountID}}&account_id={{.FilterAccountID}}{{end}}{{if .SearchKeyword}}&keyword={{.SearchKeyword}}{{end}}{{if .StartTime}}&start_time={{.StartTime}}{{end}}{{if .EndTime}}&end_time={{.EndTime}}{{end}}">
                                     <i class="bi bi-chevron-left"></i>
                                 </a>
                             </li>
@@ -111,20 +185,20 @@
                             <!-- 页码 -->
                             {{range .Pages}}
                             <li class="page-item {{if eq . $.Page}}active{{end}}">
-                                <a class="page-link" href="?page={{.}}{{if $.FilterAccountID}}&account_id={{$.FilterAccountID}}{{end}}">{{.}}</a>
+                                <a class="page-link" href="?page={{.}}{{if $.FilterAccountID}}&account_id={{$.FilterAccountID}}{{end}}{{if $.SearchKeyword}}&keyword={{$.SearchKeyword}}{{end}}{{if $.StartTime}}&start_time={{$.StartTime}}{{end}}{{if $.EndTime}}&end_time={{$.EndTime}}{{end}}">{{.}}</a>
                             </li>
                             {{end}}
                             
                             <!-- 下一页 -->
                             <li class="page-item {{if eq .Page .TotalPages}}disabled{{end}}">
-                                <a class="page-link" href="?page={{add .Page 1}}{{if .FilterAccountID}}&account_id={{.FilterAccountID}}{{end}}">
+                                <a class="page-link" href="?page={{add .Page 1}}{{if .FilterAccountID}}&account_id={{.FilterAccountID}}{{end}}{{if .SearchKeyword}}&keyword={{.SearchKeyword}}{{end}}{{if .StartTime}}&start_time={{.StartTime}}{{end}}{{if .EndTime}}&end_time={{.EndTime}}{{end}}">
                                     <i class="bi bi-chevron-right"></i>
                                 </a>
                             </li>
                             
                             <!-- 尾页 -->
                             <li class="page-item {{if eq .Page .TotalPages}}disabled{{end}}">
-                                <a class="page-link" href="?page={{.TotalPages}}{{if .FilterAccountID}}&account_id={{.FilterAccountID}}{{end}}">尾页</a>
+                                <a class="page-link" href="?page={{.TotalPages}}{{if .FilterAccountID}}&account_id={{.FilterAccountID}}{{end}}{{if .SearchKeyword}}&keyword={{.SearchKeyword}}{{end}}{{if .StartTime}}&start_time={{.StartTime}}{{end}}{{if .EndTime}}&end_time={{.EndTime}}{{end}}">尾页</a>
                             </li>
                         </ul>
                         
@@ -152,15 +226,43 @@
 // 搜索文章
 function doSearch() {
     const keyword = document.getElementById('searchInput').value.trim();
+    const startTime = document.getElementById('startTime').value;
+    const endTime = document.getElementById('endTime').value;
     const url = new URL(window.location);
     
+    // 关键词
     if (keyword) {
         url.searchParams.set('keyword', keyword);
     } else {
         url.searchParams.delete('keyword');
     }
-    url.searchParams.set('page', '1');
     
+    // 开始时间
+    if (startTime) {
+        url.searchParams.set('start_time', startTime);
+    } else {
+        url.searchParams.delete('start_time');
+    }
+    
+    // 结束时间
+    if (endTime) {
+        url.searchParams.set('end_time', endTime);
+    } else {
+        url.searchParams.delete('end_time');
+    }
+    
+    // 公众号筛选（如果不是在公众号详情页）
+    const accountFilter = document.getElementById('accountFilter');
+    if (accountFilter) {
+        const accountId = accountFilter.value;
+        if (accountId) {
+            url.searchParams.set('account_id', accountId);
+        } else {
+            url.searchParams.delete('account_id');
+        }
+    }
+    
+    url.searchParams.set('page', '1');
     window.location.href = url.toString();
 }
 
@@ -171,17 +273,22 @@ document.getElementById('searchInput').addEventListener('keypress', function(e) 
     }
 });
 
-function filterByAccount() {
-    const accountId = document.getElementById('accountFilter').value;
+// 清除单个筛选条件
+function clearFilter(type) {
     const url = new URL(window.location);
-    
-    if (accountId) {
-        url.searchParams.set('account_id', accountId);
-    } else {
-        url.searchParams.delete('account_id');
-    }
+    url.searchParams.delete(type);
     url.searchParams.set('page', '1');
-    
+    window.location.href = url.toString();
+}
+
+// 清除所有筛选条件
+function clearAllFilters() {
+    const url = new URL(window.location);
+    url.searchParams.delete('keyword');
+    url.searchParams.delete('start_time');
+    url.searchParams.delete('end_time');
+    url.searchParams.delete('account_id');
+    url.searchParams.set('page', '1');
     window.location.href = url.toString();
 }
 

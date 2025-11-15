@@ -49,39 +49,14 @@ func SetupRouter(crawlerService *service.CrawlerService) *gin.Engine {
 	staticPath := filepath.Join(rootDir, "static")
 	r.Static("/static", staticPath)
 
-	// 设置模板函数
-	// r.SetFuncMap(template.FuncMap{
-	// 	"sub": func(a, b int64) int64 {
-	// 		return a - b
-	// 	},
-	// 	"add": func(a, b int64) int64 {
-	// 		return a + b
-	// 	},
-	// })
-
-	// // 获取项目根目录
-	// rootDir := getProjectRoot()
-
-	// // 构建静态文件的绝对路径
-	// staticPath := filepath.Join(rootDir, "static")
-
-	// // 加载HTML模板（使用自定义方式保留目录结构）
-	// templatesDir := filepath.Join(rootDir, "templates")
-	// if err := loadTemplatesWithDir(r, templatesDir); err != nil {
-	// 	logger.Error("加载模板失败", zap.Error(err))
-	// 	panic(err)
-	// }
-
-	// // 静态文件服务
-	// r.Static("/static", staticPath)
-
 	// 初始化会话存储（24小时过期）
 	sessionStore := session.NewStore(24 * time.Hour)
 	middleware.InitSession(sessionStore)
 
 	// 创建处理器
 	wechatHandler := handler.NewWeChatHandler(crawlerService)
-	adminHandler := handler.NewAdminHandler(crawlerService, sessionStore)
+	feishuService := service.NewFeishuService()
+	adminHandler := handler.NewAdminHandler(crawlerService, feishuService, sessionStore)
 
 	// 管理后台路由
 	admin := r.Group("/admin")
@@ -95,22 +70,25 @@ func SetupRouter(crawlerService *service.CrawlerService) *gin.Engine {
 		adminAuth := admin.Group("")
 		adminAuth.Use(middleware.AuthRequired())
 		{
-			adminAuth.GET("", adminHandler.ShowDashboard)         // 仪表板
-			adminAuth.GET("/", adminHandler.ShowDashboard)        // 仪表板
-			adminAuth.GET("/accounts", adminHandler.ShowAccounts) // 公众号管理
-			adminAuth.GET("/articles", adminHandler.ShowArticles) // 文章管理
-			adminAuth.GET("/tasks", adminHandler.ShowTasks)       // 任务管理
-			adminAuth.GET("/settings", adminHandler.ShowSettings) // 系统设置
-			adminAuth.GET("/logout", adminHandler.Logout)         // 退出登录
+			adminAuth.GET("", adminHandler.ShowDashboard)                    // 仪表板
+			adminAuth.GET("/", adminHandler.ShowDashboard)                   // 仪表板
+			adminAuth.GET("/accounts", adminHandler.ShowAccounts)            // 公众号管理
+			adminAuth.GET("/accounts/:id", adminHandler.ShowAccountArticles) // 公众号文章列表
+			adminAuth.GET("/articles", adminHandler.ShowArticles)            // 文章管理
+			adminAuth.GET("/tasks", adminHandler.ShowTasks)                  // 任务管理
+			adminAuth.GET("/settings", adminHandler.ShowSettings)            // 系统设置
+			adminAuth.GET("/logout", adminHandler.Logout)                    // 退出登录
 		}
 
 		// 管理后台API（需要认证）
 		adminAPI := admin.Group("/api")
 		adminAPI.Use(middleware.AuthRequired())
 		{
-			adminAPI.POST("/tasks/trigger", adminHandler.TriggerCrawl)     // 手动触发爬取
-			adminAPI.POST("/settings/update", adminHandler.UpdateSettings) // 更新设置
-			adminAPI.GET("/logs", adminHandler.GetLogs)                    // 获取日志
+			adminAPI.POST("/tasks/trigger", adminHandler.TriggerCrawl)             // 手动触发爬取
+			adminAPI.POST("/settings/update", adminHandler.UpdateSettings)         // 更新设置
+			adminAPI.GET("/logs", adminHandler.GetLogs)                            // 获取日志
+			adminAPI.POST("/feishu/save", adminHandler.SaveFeishuConfig)           // 保存飞书配置
+			adminAPI.POST("/feishu/test", adminHandler.TestFeishuNotification)     // 测试飞书通知
 		}
 	}
 
